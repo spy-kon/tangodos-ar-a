@@ -13,11 +13,11 @@
 
   <style>
     html.fullscreen { position: fixed; inset: 0; }
-    html.fullscreen body {
+    body {
       margin: 0;
-      overflow: hidden;
       width: 100%;
       height: 100%;
+      overflow: hidden;
       font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
     }
 
@@ -36,7 +36,7 @@
     .videocontrols a {
       background: #efefef;
       color: #111;
-      padding: 10px 16px;
+      padding: 10px 18px;
       border-radius: 10px;
       text-decoration: none;
       font-size: 14px;
@@ -59,22 +59,23 @@
 
   <script>
     /* ==========================
-       Play / Pause
+       Play / Pause + Unmute
        ========================== */
     function playpauseVideo(id) {
-      const v = document.getElementById(id);
-      if (!v) return;
+      const video = document.getElementById(id);
+      if (!video) return;
 
-      if (v.paused) {
-        v.play().catch(err => console.warn(err));
+      if (video.paused) {
+        video.muted = false;        // 🔊 ΑΝΟΙΓΕΙ Ο ΗΧΟΣ ΜΕ USER GESTURE
+        video.play().catch(e => console.warn(e));
       } else {
-        v.pause();
+        video.pause();
       }
     }
     window.playpauseVideo = playpauseVideo;
 
     /* ==========================
-       MindAR video handler
+       MindAR Alpha Video Handler
        ========================== */
     AFRAME.registerComponent('videohandler', {
       schema: {
@@ -84,18 +85,31 @@
       init() {
         const marker = this.el;
         const video = document.getElementById(this.data.videoid);
-        const btn = document.getElementById('button' + this.data.videoid);
+        const plane = marker.querySelector('a-plane');
 
-        marker.addEventListener('targetFound', () => {
-          if (btn) btn.className = 'visible';
+        marker.addEventListener('targetFound', async () => {
+          try {
+            video.muted = true;     // 🔇 autoplay muted
+            await video.play();
+          } catch (e) {
+            console.warn('Autoplay blocked:', e);
+          }
+
+          // force WebGL texture refresh (λύση μαύρου πλαισίου)
+          if (plane && plane.object3D) {
+            plane.object3D.traverse(obj => {
+              if (obj.material && obj.material.map) {
+                obj.material.map.needsUpdate = true;
+                obj.material.transparent = true;
+              }
+            });
+          }
         });
 
         marker.addEventListener('targetLost', () => {
-          if (btn) btn.className = 'hidden';
-          if (video) {
-            video.pause();
-            video.currentTime = 0;
-          }
+          video.pause();
+          video.currentTime = 0;
+          video.muted = true;       // reset
         });
       }
     });
@@ -117,16 +131,19 @@
       <video
         id="video"
         preload="none"
+        muted
         playsinline
         webkit-playsinline
-        muted
         crossorigin="anonymous"
       >
-        <source src="./video-android.webm" type="video/webm">
+        <source
+          src="https://www.tangodos.gr/managed_images/video-android.webm"
+          type="video/webm"
+        >
       </video>
     </a-assets>
 
-    <!-- Target -->
+    <!-- Image Target -->
     <a-entity
       mindar-image-target="targetIndex: 0"
       videohandler="videoid: video"
@@ -134,7 +151,7 @@
       <!-- Alpha video plane -->
       <a-plane
         width="1.0"
-        height="1.0"
+        height="1.4"
         position="0 0 0.01"
         material="shader: flat; src: #video; transparent: true"
       ></a-plane>
@@ -148,11 +165,9 @@
 
   </a-scene>
 
-  <!-- Play / Pause -->
+  <!-- Play / Pause button -->
   <div class="videocontrols">
     <a
-      id="buttonvideo"
-      class="hidden"
       href="#"
       onclick="playpauseVideo('video'); return false;"
     >
