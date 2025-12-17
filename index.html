@@ -5,80 +5,111 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>AR Video Tango Dos</title>
 
-<script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <!-- A-Frame -->
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+
+  <!-- MindAR -->
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
   <style>
-    html.fullscreen { bottom: 0; left: 0; position: fixed; right: 0; top: 0; }
-    html.fullscreen body { height: 100%; margin: 0; overflow: hidden; padding: 0; width: 100%; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+    html.fullscreen { position: fixed; inset: 0; }
+    html.fullscreen body {
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      width: 100%;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    }
+
     .hidden { display: none; }
     .visible-block { display: block; }
 
     .videocontrols {
-      position: fixed; bottom: 40px; top: auto; left: 0; right: 0; text-align: center; z-index: 10;
+      position: fixed;
+      bottom: 40px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      z-index: 10;
     }
+
     .videocontrols a {
-      font-size: 14px; border-radius: 10px; padding: 10px 16px; margin: 0 6px;
-      background: #efefef; color: #111; text-decoration: none;
-      display: block;
+      font-size: 14px;
+      border-radius: 10px;
+      padding: 10px 16px;
+      background: #efefef;
+      color: #111;
+      text-decoration: none;
+      display: inline-block;
     }
 
-    .menuicons, .menuicons.rightdown { position: absolute; bottom: 0; right: 20px; z-index: 10; }
-    .menuicons.leftdown { left: 20px; right: auto; }
-    .menuicons a { display: block; margin-bottom: 20px; }
-    .menuicons a img { border-radius: 50%; }
-
-    /* Μήνυμα στη μάσκα scanning */
     .mindar-ui-scanning .scanning:before {
       content: "Σημαδέψτε την αφίσα";
-      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      font-size: 6vw; color: #fff; text-shadow: 0 0 5px #000; width: 100%; text-align: center; z-index: 1;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 6vw;
+      color: #fff;
+      text-shadow: 0 0 5px #000;
+      width: 100%;
+      text-align: center;
+      z-index: 1;
     }
   </style>
 
   <script>
-    // --- Pure JS components (χωρίς jQuery) ---
-
-    // Παίζει/παύει συγκεκριμένο <video> (καλείται από τα overlay κουμπιά)
+    /* =============================
+       Play / Pause button handler
+       ============================= */
     function playpauseVideo(videoId) {
-      const v = document.getElementById(videoId);
-      if (!v) return;
-      if (v.paused) {
-        // Αν κολλάει σε iOS με ήχο, δοκίμασε: v.muted = true;
-        v.play().catch(err => console.warn('play() failed:', err));
+      const video = document.getElementById(videoId);
+      if (!video) return;
+
+      if (video.paused) {
+        video.play().catch(err => console.warn('play() failed:', err));
       } else {
-        v.pause();
+        video.pause();
       }
     }
     window.playpauseVideo = playpauseVideo;
 
-    // Χειριστής video ανά target: δείχνει κουμπί στο Found, σταματά/μηδενίζει στο Lost
+    /* =============================
+       MindAR video handler
+       ============================= */
     AFRAME.registerComponent('videohandler', {
+      schema: {
+        videoid: { type: 'string' }
+      },
+
       init() {
-        const marker     = this.el;
-        const videoId    = marker.getAttribute('videoid');      // π.χ. "video"
-        const videoEl    = document.getElementById(videoId);
-        const aVideo     = document.getElementById('a' + videoId); // π.χ. "avideo"
+        const marker = this.el;
+        const videoId = this.data.videoid;
+
+        const videoEl = document.getElementById(videoId);
+        const aVideo = document.getElementById('a' + videoId);
         const playButton = document.getElementById('button' + videoId);
 
-        // (Προαιρετικό) διόρθωση format αν χρησιμοποιείται transparency
-        aVideo.addEventListener('model-loaded', () => {
-          const mesh = aVideo.getObject3D('mesh');
-          if (mesh && mesh.material && mesh.material.map) {
-            mesh.material.map.format = THREE.RGBAFormat;
-          }
-        });
+        // Fix transparency edge cases
+        if (aVideo) {
+          aVideo.addEventListener('loaded', () => {
+            const mesh = aVideo.getObject3D('mesh');
+            if (window.THREE && mesh?.material?.map) {
+              mesh.material.map.format = THREE.RGBAFormat;
+            }
+          });
+        }
 
         marker.addEventListener('targetFound', () => {
-          // ΔΕΝ κάνουμε autoplay: μόνο εμφανίζουμε το κουμπί
           if (playButton) playButton.className = 'visible-block';
         });
 
         marker.addEventListener('targetLost', () => {
           if (playButton) playButton.className = 'hidden';
-          try { videoEl.pause(); videoEl.currentTime = 0; } catch(e){}
-          const scanning = document.querySelector('.mindar-ui-scanning');
-          if (scanning) scanning.classList.remove('hidden');
+          try {
+            videoEl.pause();
+            videoEl.currentTime = 0;
+          } catch (e) {}
         });
       }
     });
@@ -86,43 +117,66 @@
 </head>
 
 <body>
+
   <a-scene
     loading-screen="dotsColor: green; backgroundColor: white"
-    mindar-image="imageTargetSrc: https://github.com/spy-kon/tangodos-ar-a/blob/ee0a0d54286288a807c335e1b69a95d4bd787ddd/targets.mind"
+    mindar-image="imageTargetSrc: ./targets.mind"
     color-space="sRGB"
     renderer="colorManagement: true; physicallyCorrectLights: true"
     device-orientation-permission-ui="enabled: true"
     vr-mode-ui="enabled: false"
     embedded
   >
-    <!-- Assets: δύο videos χωρίς autoplay/loop (ελέγχονται από τα κουμπιά) -->
+
+    <!-- Assets -->
     <a-assets timeout="30000">
-      <video id="video"  preload="auto" playsinline webkit-playsinline autoplay loop crossorigin="anonymous">
-        <source src="https://www.tangodos.gr/managed_images/video.webm" type="video/webm">
-        <!-- <source src="./assets/video.webm" type="video/webm"> -->
+      <video
+        id="video"
+        preload="auto"
+        playsinline
+        webkit-playsinline
+        muted
+        crossorigin="anonymous"
+      >
+        <source src="video-android.webm" type="video/webm">
       </video>
     </a-assets>
 
-    <!-- TARGET 0 -->
+    <!-- Target 0 -->
     <a-entity
       mindar-image-target="targetIndex: 0"
-      videohandler="videoid: video">
-      <a-video id="avideo"
-               src="#video"
-               width="1.0" height="1.4"
-               position="0 0 0.01" rotation="0 0 0"
-               material="transparent: true; shader: flat"></a-video>
+      videohandler="videoid: video"
+    >
+      <a-video
+        id="avideo"
+        src="#video"
+        width="1.0"
+        height="1.4"
+        position="0 0 0.01"
+        rotation="0 0 0"
+        material="transparent: true; shader: flat"
+      ></a-video>
     </a-entity>
 
-    <!-- Κάμερα -->
-    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+    <!-- Camera -->
+    <a-camera
+      position="0 0 0"
+      look-controls="enabled: false"
+    ></a-camera>
+
   </a-scene>
 
-  <!-- Overlay controls -->
+  <!-- Overlay Play / Pause -->
   <div class="videocontrols">
-    <a id="buttonvideo"  class="hidden" href="#" onclick="playpauseVideo('video');return false;">Play / Pause</a>
+    <a
+      id="buttonvideo"
+      class="hidden"
+      href="#"
+      onclick="playpauseVideo('video'); return false;"
+    >
+      Play / Pause
+    </a>
   </div>
 
-  
 </body>
 </html>
