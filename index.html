@@ -14,15 +14,15 @@
   <style>
     html.fullscreen { position: fixed; inset: 0; }
     html.fullscreen body {
-      height: 100%;
       margin: 0;
       overflow: hidden;
       width: 100%;
+      height: 100%;
       font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
     }
 
     .hidden { display: none; }
-    .visible-block { display: block; }
+    .visible { display: block; }
 
     .videocontrols {
       position: fixed;
@@ -34,12 +34,12 @@
     }
 
     .videocontrols a {
-      font-size: 14px;
-      border-radius: 10px;
-      padding: 10px 16px;
       background: #efefef;
       color: #111;
+      padding: 10px 16px;
+      border-radius: 10px;
       text-decoration: none;
+      font-size: 14px;
       display: inline-block;
     }
 
@@ -54,29 +54,28 @@
       text-shadow: 0 0 5px #000;
       width: 100%;
       text-align: center;
-      z-index: 1;
     }
   </style>
 
   <script>
-    /* =============================
-       Play / Pause button handler
-       ============================= */
-    function playpauseVideo(videoId) {
-      const video = document.getElementById(videoId);
-      if (!video) return;
+    /* ==========================
+       Play / Pause
+       ========================== */
+    function playpauseVideo(id) {
+      const v = document.getElementById(id);
+      if (!v) return;
 
-      if (video.paused) {
-        video.play().catch(err => console.warn('play() failed:', err));
+      if (v.paused) {
+        v.play().catch(err => console.warn(err));
       } else {
-        video.pause();
+        v.pause();
       }
     }
     window.playpauseVideo = playpauseVideo;
 
-    /* =============================
+    /* ==========================
        MindAR video handler
-       ============================= */
+       ========================== */
     AFRAME.registerComponent('videohandler', {
       schema: {
         videoid: { type: 'string' }
@@ -84,32 +83,19 @@
 
       init() {
         const marker = this.el;
-        const videoId = this.data.videoid;
-
-        const videoEl = document.getElementById(videoId);
-        const aVideo = document.getElementById('a' + videoId);
-        const playButton = document.getElementById('button' + videoId);
-
-        // Fix transparency edge cases
-        if (aVideo) {
-          aVideo.addEventListener('loaded', () => {
-            const mesh = aVideo.getObject3D('mesh');
-            if (window.THREE && mesh?.material?.map) {
-              mesh.material.map.format = THREE.RGBAFormat;
-            }
-          });
-        }
+        const video = document.getElementById(this.data.videoid);
+        const btn = document.getElementById('button' + this.data.videoid);
 
         marker.addEventListener('targetFound', () => {
-          if (playButton) playButton.className = 'visible-block';
+          if (btn) btn.className = 'visible';
         });
 
         marker.addEventListener('targetLost', () => {
-          if (playButton) playButton.className = 'hidden';
-          try {
-            videoEl.pause();
-            videoEl.currentTime = 0;
-          } catch (e) {}
+          if (btn) btn.className = 'hidden';
+          if (video) {
+            video.pause();
+            video.currentTime = 0;
+          }
         });
       }
     });
@@ -119,17 +105,15 @@
 <body>
 
   <a-scene
-    loading-screen="dotsColor: green; backgroundColor: white"
-    mindar-image="imageTargetSrc: ./targets.mind"
-    color-space="sRGB"
-    renderer="colorManagement: true; physicallyCorrectLights: true"
-    device-orientation-permission-ui="enabled: true"
-    vr-mode-ui="enabled: false"
     embedded
+    vr-mode-ui="enabled: false"
+    device-orientation-permission-ui="enabled: true"
+    renderer="alpha: true; colorManagement: true"
+    mindar-image="imageTargetSrc: ./targets.mind"
   >
 
     <!-- Assets -->
-    <a-assets timeout="30000">
+    <a-assets timeout="20000">
       <video
         id="video"
         preload="none"
@@ -142,20 +126,18 @@
       </video>
     </a-assets>
 
-    <!-- Target 0 -->
+    <!-- Target -->
     <a-entity
       mindar-image-target="targetIndex: 0"
       videohandler="videoid: video"
     >
-      <a-video
-        id="avideo"
-        src="#video"
+      <!-- Alpha video plane -->
+      <a-plane
         width="1.0"
         height="1.4"
         position="0 0 0.01"
-        rotation="0 0 0"
-        material="transparent: true; shader: flat"
-      ></a-video>
+        material="shader: flat; src: #video; transparent: true"
+      ></a-plane>
     </a-entity>
 
     <!-- Camera -->
@@ -164,16 +146,9 @@
       look-controls="enabled: false"
     ></a-camera>
 
-    <a-plane
-  width="1.0"
-  height="1.4"
-  material="shader: flat; src: #video; transparent: true"
-  position="0 0 0.01">
-</a-plane>
-
   </a-scene>
 
-  <!-- Overlay Play / Pause -->
+  <!-- Play / Pause -->
   <div class="videocontrols">
     <a
       id="buttonvideo"
