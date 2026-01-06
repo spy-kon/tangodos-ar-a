@@ -55,6 +55,131 @@
       width: 100%;
       text-align: center;
     }
+
+    /* ==========================
+       Locations Button (Bottom Right)
+       ========================== */
+    .locations-btn {
+      position: fixed;
+      bottom: 40px;
+      right: 20px;
+      z-index: 11;
+    }
+
+    .locations-btn button {
+      background: #111;
+      color: #fff;
+      border: none;
+      padding: 12px 18px;
+      border-radius: 12px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    /* ==========================
+       Modal Overlay
+       ========================== */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    /* ==========================
+       Modal Box
+       ========================== */
+    .modal {
+      background: #fff;
+      width: 90%;
+      max-width: 360px;
+      border-radius: 16px;
+      padding: 20px;
+      position: relative;
+    }
+
+    /* Close Button */
+    .modal-close {
+      position: absolute;
+      top: 12px;
+      right: 14px;
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+    }
+
+    /* ==========================
+       Locations Buttons (Generic)
+       ========================== */
+    .location-list {
+      margin-top: 20px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .location-btn {
+      width: 100%;
+      padding: 14px;
+      background: #efefef;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    .location-btn:hover {
+      background: #ddd;
+    }
+
+    /* ==========================
+       Loading Indicator
+       ========================== */
+    .loading-indicator {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 30;
+      background: rgba(0,0,0,0.55);
+    }
+
+    .loading-indicator.active {
+      display: flex;
+    }
+
+    .loading-box {
+      background: rgba(255,255,255,0.95);
+      color: #111;
+      padding: 14px 18px;
+      border-radius: 12px;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border-radius: 999px;
+      border: 2px solid rgba(0,0,0,0.25);
+      border-top-color: rgba(0,0,0,0.85);
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
   </style>
 
   <script>
@@ -73,6 +198,67 @@
       }
     }
     window.playpauseVideo = playpauseVideo;
+
+    /* ==========================
+       Modal helpers
+       ========================== */
+    function openLocationsModal() {
+      document.getElementById('locationsModal')?.classList.add('active');
+    }
+
+    function closeLocationsModal() {
+      document.getElementById('locationsModal')?.classList.remove('active');
+    }
+
+    /* ==========================
+       Loading
+       ========================== */
+    function showLoading(ms = 1000) {
+      const el = document.getElementById('loadingIndicator');
+      if (!el) return;
+      el.classList.add('active');
+      setTimeout(() => el.classList.remove('active'), ms);
+    }
+
+    /* ==========================
+       Change Video Source (same target)
+       ========================== */
+    function changeVideo(src) {
+      const video = document.getElementById('video');
+      const source = document.getElementById('videoSource');
+      if (!video || !source) return;
+
+      // Show loading for 1s
+      showLoading(1000);
+
+      // Stop current
+      video.pause();
+      video.currentTime = 0;
+      video.muted = true; // keep autoplay safe
+
+      // Swap source
+      source.src = src;
+      video.load();
+
+      // Play again after 1s
+      setTimeout(() => {
+        video.play().catch(() => {});
+        // Force texture refresh to avoid black frame
+        const plane = document.querySelector('a-plane');
+        if (plane && plane.object3D) {
+          plane.object3D.traverse(obj => {
+            if (obj.material && obj.material.map) {
+              obj.material.map.needsUpdate = true;
+              obj.material.transparent = true;
+            }
+          });
+        }
+      }, 1000);
+    }
+
+    window.changeVideo = changeVideo;
+    window.openLocationsModal = openLocationsModal;
+    window.closeLocationsModal = closeLocationsModal;
 
     /* ==========================
        MindAR Alpha Video Handler
@@ -136,10 +322,7 @@
         webkit-playsinline
         crossorigin="anonymous"
       >
-        <source
-          src="./video-android.webm"
-          type="video/webm"
-        >
+        <source id="videoSource" src="./video-android.webm" type="video/webm">
       </video>
     </a-assets>
 
@@ -167,12 +350,43 @@
 
   <!-- Play / Pause button -->
   <div class="videocontrols">
-    <a
-      href="#"
-      onclick="playpauseVideo('video'); return false;"
-    >
+    <a href="#" onclick="playpauseVideo('video'); return false;">
       Play / Pause
     </a>
+  </div>
+
+  <!-- Locations Button -->
+  <div class="locations-btn">
+    <button onclick="openLocationsModal()">Τοποθεσίες</button>
+  </div>
+
+  <!-- Modal -->
+  <div id="locationsModal" class="modal-overlay" onclick="if(event.target.id==='locationsModal') closeLocationsModal();">
+    <div class="modal">
+      <button class="modal-close" onclick="closeLocationsModal()">✕</button>
+
+      <h3>Επιλέξτε Τοποθεσία</h3>
+
+      <div class="location-list">
+        <button class="location-btn"
+          onclick="changeVideo('./xartis-ar-rio.webm'); closeLocationsModal();">
+          Γέφυρα Ρίο-Αντίρριο
+        </button>
+
+        <button class="location-btn"
+          onclick="changeVideo('./xartis-ar-agandreas.webm'); closeLocationsModal();">
+          Ιερός Ναός Αγίου Ανδρέα
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading Indicator -->
+  <div id="loadingIndicator" class="loading-indicator">
+    <div class="loading-box">
+      <div class="spinner"></div>
+      <div>Φόρτωση...</div>
+    </div>
   </div>
 
 </body>
