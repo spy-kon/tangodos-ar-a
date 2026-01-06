@@ -21,9 +21,6 @@
       font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
     }
 
-    .hidden { display: none; }
-    .visible { display: block; }
-
     .videocontrols {
       position: fixed;
       bottom: 40px;
@@ -89,9 +86,7 @@
       z-index: 20;
     }
 
-    .modal-overlay.active {
-      display: flex;
-    }
+    .modal-overlay.active { display: flex; }
 
     /* ==========================
        Modal Box
@@ -105,7 +100,6 @@
       position: relative;
     }
 
-    /* Close Button */
     .modal-close {
       position: absolute;
       top: 12px;
@@ -136,12 +130,10 @@
       text-align: center;
     }
 
-    .location-btn:hover {
-      background: #ddd;
-    }
+    .location-btn:hover { background: #ddd; }
 
     /* ==========================
-       Loading Indicator
+       Loading Indicator (1s)
        ========================== */
     .loading-indicator {
       position: fixed;
@@ -153,9 +145,7 @@
       background: rgba(0,0,0,0.55);
     }
 
-    .loading-indicator.active {
-      display: flex;
-    }
+    .loading-indicator.active { display: flex; }
 
     .loading-box {
       background: rgba(255,255,255,0.95);
@@ -177,12 +167,13 @@
       animation: spin 0.8s linear infinite;
     }
 
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 
   <script>
+    // ====== Config ======
+    const DEFAULT_VIDEO_SRC = "./main-video.webm"; // <-- αρχικό video (main-video)
+
     /* ==========================
        Play / Pause + Unmute
        ========================== */
@@ -191,7 +182,7 @@
       if (!video) return;
 
       if (video.paused) {
-        video.muted = false;        // 🔊 ΑΝΟΙΓΕΙ Ο ΗΧΟΣ ΜΕ USER GESTURE
+        video.muted = false; // 🔊 ανοίγει ήχος με user gesture
         video.play().catch(e => console.warn(e));
       } else {
         video.pause();
@@ -205,13 +196,14 @@
     function openLocationsModal() {
       document.getElementById('locationsModal')?.classList.add('active');
     }
-
     function closeLocationsModal() {
       document.getElementById('locationsModal')?.classList.remove('active');
     }
+    window.openLocationsModal = openLocationsModal;
+    window.closeLocationsModal = closeLocationsModal;
 
     /* ==========================
-       Loading
+       Loading (fixed 1s)
        ========================== */
     function showLoading(ms = 1000) {
       const el = document.getElementById('loadingIndicator');
@@ -228,74 +220,76 @@
       const source = document.getElementById('videoSource');
       if (!video || !source) return;
 
-      // Show loading for 1s
       showLoading(1000);
 
-      // Stop current
       video.pause();
       video.currentTime = 0;
       video.muted = true; // keep autoplay safe
 
-      // Swap source
       source.src = src;
       video.load();
 
-      // Play again after 1s
+      // Try to play after 1s (after overlay)
       setTimeout(() => {
         video.play().catch(() => {});
-        // Force texture refresh to avoid black frame
-        const plane = document.querySelector('a-plane');
-        if (plane && plane.object3D) {
-          plane.object3D.traverse(obj => {
-            if (obj.material && obj.material.map) {
-              obj.material.map.needsUpdate = true;
-              obj.material.transparent = true;
-            }
-          });
-        }
+        forcePlaneTextureRefresh();
       }, 1000);
     }
-
     window.changeVideo = changeVideo;
-    window.openLocationsModal = openLocationsModal;
-    window.closeLocationsModal = closeLocationsModal;
+
+    function forcePlaneTextureRefresh() {
+      const plane = document.querySelector('a-plane');
+      if (!plane || !plane.object3D) return;
+      plane.object3D.traverse(obj => {
+        if (obj.material && obj.material.map) {
+          obj.material.map.needsUpdate = true;
+          obj.material.transparent = true;
+        }
+      });
+    }
 
     /* ==========================
-       MindAR Alpha Video Handler
+       Ensure initial src is main-video
+       ========================== */
+    function setInitialVideo() {
+      const source = document.getElementById('videoSource');
+      const video = document.getElementById('video');
+      if (!source || !video) return;
+
+      source.src = DEFAULT_VIDEO_SRC;
+      video.load();
+    }
+
+    /* ==========================
+       MindAR Video Handler
+       - On first targetFound plays DEFAULT (main-video)
+       - Afterwards buttons can swap src and it will keep playing on same target
        ========================== */
     AFRAME.registerComponent('videohandler', {
-      schema: {
-        videoid: { type: 'string' }
-      },
+      schema: { videoid: { type: 'string' } },
 
       init() {
         const marker = this.el;
         const video = document.getElementById(this.data.videoid);
-        const plane = marker.querySelector('a-plane');
+
+        // make sure initial video is set before any tracking
+        setInitialVideo();
 
         marker.addEventListener('targetFound', async () => {
           try {
-            video.muted = true;     // 🔇 autoplay muted
+            // Always autoplay muted (browser policy)
+            video.muted = true;
             await video.play();
           } catch (e) {
             console.warn('Autoplay blocked:', e);
           }
-
-          // force WebGL texture refresh (λύση μαύρου πλαισίου)
-          if (plane && plane.object3D) {
-            plane.object3D.traverse(obj => {
-              if (obj.material && obj.material.map) {
-                obj.material.map.needsUpdate = true;
-                obj.material.transparent = true;
-              }
-            });
-          }
+          forcePlaneTextureRefresh();
         });
 
         marker.addEventListener('targetLost', () => {
           video.pause();
           video.currentTime = 0;
-          video.muted = true;       // reset
+          video.muted = true;
         });
       }
     });
@@ -322,7 +316,8 @@
         webkit-playsinline
         crossorigin="anonymous"
       >
-        <source id="videoSource" src="./video-android.webm" type="video/webm">
+        <!-- αρχικό src θα οριστεί σε main-video.webm via JS -->
+        <source id="videoSource" src="./main-video.webm" type="video/webm">
       </video>
     </a-assets>
 
@@ -331,7 +326,6 @@
       mindar-image-target="targetIndex: 0"
       videohandler="videoid: video"
     >
-      <!-- Alpha video plane -->
       <a-plane
         width="1.0"
         height="1.4"
@@ -341,14 +335,11 @@
     </a-entity>
 
     <!-- Camera -->
-    <a-camera
-      position="0 0 0"
-      look-controls="enabled: false"
-    ></a-camera>
+    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
   </a-scene>
 
-  <!-- Play / Pause button -->
+  <!-- Play / Pause button (user gesture για unmute) -->
   <div class="videocontrols">
     <a href="#" onclick="playpauseVideo('video'); return false;">
       Play / Pause
